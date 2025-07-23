@@ -1,15 +1,18 @@
 package com.example.weather.presentation.screen
 
 import android.annotation.SuppressLint
-import android.content.Context
-import android.location.Geocoder
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
 import android.location.Location
+import android.location.Geocoder
+import java.util.Locale
+import android.content.Context
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Brightness4
@@ -25,15 +28,16 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
 import com.example.weather.presentation.viewmodel.WeatherViewModel
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
 import java.util.*
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WeatherScreen(viewModel: WeatherViewModel = viewModel()) {
-    var city by remember { mutableStateOf("Almaty") }
+    var city by remember { mutableStateOf("Астана") }
     val apiKey = "7de9cb86647eefd9a6bdaca678609776"
     val context = LocalContext.current
 
@@ -78,8 +82,10 @@ fun WeatherScreen(viewModel: WeatherViewModel = viewModel()) {
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+                        .padding(horizontal = 24.dp, vertical = 16.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(bottom = 80.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     OutlinedTextField(
@@ -133,7 +139,10 @@ fun WeatherScreen(viewModel: WeatherViewModel = viewModel()) {
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text("Температура: ${weather.temperature}°C", fontSize = 18.sp)
+                                Text("Ощущается как: ${weather.feelsLike}°C", fontSize = 18.sp)
                                 Text("Влажность: ${weather.humidity}%", fontSize = 18.sp)
+                                Text("Давление: ${weather.pressure} мм рт. ст. (${getPressureState(weather.pressure)})", fontSize = 18.sp)
+                                Text("Ветер: ${weather.windSpeed} м/с", fontSize = 18.sp)
                                 Text(
                                     "Последнее обновление: ${viewModel.lastUpdatedTime}",
                                     fontSize = 14.sp,
@@ -146,27 +155,54 @@ fun WeatherScreen(viewModel: WeatherViewModel = viewModel()) {
                     if (viewModel.forecast.isNotEmpty()) {
                         Text("Прогноз на несколько дней:", fontSize = 18.sp)
 
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            items(viewModel.forecast) { item ->
-                                Card(
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.size(width = 120.dp, height = 160.dp)
-                                ) {
+                        val groupedForecast = remember(viewModel.forecast) {
+                            viewModel.forecast.groupBy { it.date.substringBefore(" ") }
+                        }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            groupedForecast.forEach { (dateStr, dayForecastList) ->
+                                val timesToShow = listOf("12:00", "15:00", "18:00", "21:00")
+                                val filteredForecasts = timesToShow.mapNotNull { time ->
+                                    dayForecastList.find { it.date.contains(time) }?.let { time to it }
+                                }
+
+                                if (filteredForecasts.isNotEmpty()) {
+                                    val formattedDate = runCatching {
+                                        val inputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                                        val outputFormat = SimpleDateFormat("d MMMM yy г.", Locale("ru"))
+                                        outputFormat.format(inputFormat.parse(dateStr)!!)
+                                    }.getOrNull() ?: dateStr
+
+                                    Text(
+                                        text = formattedDate,
+                                        fontSize = 16.sp,
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    )
+
                                     Column(
-                                        modifier = Modifier.padding(8.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 8.dp)
                                     ) {
-                                        Text(item.date, fontSize = 14.sp)
-                                        Image(
-                                            painter = rememberAsyncImagePainter(item.iconUrl),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(48.dp)
-                                        )
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text("${item.temperature}°C", fontSize = 16.sp)
+                                        filteredForecasts.forEach { (time, item) ->
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(text = time, fontSize = 14.sp)
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Image(
+                                                        painter = rememberAsyncImagePainter(item.iconUrl),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(32.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text("${item.temperature}°C", fontSize = 14.sp)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -176,9 +212,19 @@ fun WeatherScreen(viewModel: WeatherViewModel = viewModel()) {
                     viewModel.error?.let { error ->
                         Text(text = error, color = MaterialTheme.colorScheme.error)
                     }
+
+                    Spacer(modifier = Modifier.height(32.dp))
                 }
             }
         )
+    }
+}
+
+fun getPressureState(pressure: Int): String {
+    return when {
+        pressure < 1000 -> "Низкое"
+        pressure in 1000..1020 -> "Нормальное"
+        else -> "Высокое"
     }
 }
 

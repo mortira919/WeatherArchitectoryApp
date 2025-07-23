@@ -10,6 +10,9 @@ fun WeatherResponseDto.toDomain(): WeatherModel {
         city = name,
         temperature = main.temp,
         humidity = main.humidity,
+        feelsLike = main.feels_like,
+        pressure = main.pressure,
+        windSpeed = wind.speed,
         iconUrl = "https://openweathermap.org/img/wn/${icon}@2x.png"
     )
 }

@@ -8,12 +8,19 @@ import retrofit2.http.Query
 data class WeatherResponseDto(
     val name: String,
     val main: MainDto,
+    val wind: WindDto,                    // ← новое поле
     val weather: List<WeatherDto>
 )
 
 data class MainDto(
     val temp: Double,
-    val humidity: Int
+    val humidity: Int,
+    val pressure: Int,       // ← новое поле
+    val feels_like: Double   // ← новое поле
+)
+
+data class WindDto(
+    val speed: Double        // ← новое поле
 )
 
 data class WeatherDto(
